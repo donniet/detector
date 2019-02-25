@@ -1,4 +1,4 @@
-package detector
+package detect
 
 /*
 //#cgo LDFLAGS: -L../detect_faces/build/armv7l/Release/lib -ldetector -lclassifier -lmulti_modal
