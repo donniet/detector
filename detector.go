@@ -2,7 +2,8 @@ package detect
 
 /*
 //#cgo LDFLAGS: -L../detect_faces/build/armv7l/Release/lib -ldetector -lclassifier -lmulti_modal
-#cgo LDFLAGS: -L../detect_faces/build/intel64/Debug/lib -ldetector -lclassifier -lmulti_modal
+//#cgo LDFLAGS: -L${SRCDIR}/../../workspace/detect_faces/build/intel64/Debug/lib -ldetector -lclassifier -lmulti_modal
+#cgo -ldetector -lclassifier -lmulti_modal
 
 typedef unsigned int uint;
 
