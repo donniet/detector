@@ -86,6 +86,7 @@ void mm_destroy(multi_modal_wrapper * wrapper);
 void mm_insert(multi_modal_wrapper * wrapper, float * sample, unsigned long dimensions);
 unsigned long mm_get_count(multi_modal_wrapper * wrapper);
 void mm_extract_peaks(multi_modal_wrapper * wrapper, distribution_wrapper ** wrappers, unsigned long * wrapper_count);
+void mm_find_peak(multi_modal_wrapper * wrapper, float * sample, unsigned long dimensions, distribution_wrapper ** wrappers, unsigned long * wrapper_count);
 void mm_destroy_peaks(multi_modal_wrapper * wrapper, distribution_wrapper * wrappers, unsigned long wrapper_count);
 
 distribution_wrapper * get_peak(distribution_wrapper * dist, uint i) {
@@ -117,6 +118,27 @@ type Distribution struct {
 	Id     uint64
 }
 
+func (d Distribution) Erf(vector []float32) float32 {
+	l := len(vector)
+	if l > len(d.Mean) {
+		l = len(d.Mean)
+	}
+	diff := make([]float32, l)
+
+	for i := 0; i < l; i++ {
+		diff[i] = vector[i] - d.Mean[i]
+	}
+
+	var acc float32
+	for _, x := range diff {
+		acc += x * x
+	}
+
+	y := math.Sqrt(float64(acc))
+
+	return float32(math.Erf(y/float64(d.StdDev))) / d.StdDev
+}
+
 func NewMultiModal(dimensions int, maximumNodes int) MultiModal {
 	return MultiModal{
 		wrapper: C.mm_create(C.ulong(dimensions), C.ulong(maximumNodes)),
@@ -135,12 +157,40 @@ func (mm MultiModal) Insert(vector []float32) {
 func (mm MultiModal) Count() int {
 	return int(C.mm_get_count(mm.wrapper))
 }
+func (mm MultiModal) Find(vector []float32) Distribution {
+	var dist *C.distribution_wrapper
+	var count C.ulong
+
+	dat := make([]C.float, len(vector))
+	for i, f := range vector {
+		dat[i] = C.float(f)
+	}
+
+	C.mm_find_peak(mm.wrapper, &dat[0], C.ulong(len(vector)), &dist, &count)
+	defer C.mm_destroy_peaks(mm.wrapper, dist, count)
+
+	d := C.get_peak(dist, C.uint(0))
+
+	mean := make([]float32, mm.wrapper.dimensions)
+	for j := 0; j < int(mm.wrapper.dimensions); j++ {
+		mean[j] = float32(C.get_element(d.mean, C.uint(j)))
+	}
+
+	return Distribution{
+		Mean:   mean,
+		StdDev: float32(d.standard_deviation),
+		Count:  int(d.sample_count),
+		Id:     uint64(d.id),
+	}
+
+}
 func (mm MultiModal) Peaks() []Distribution {
 	var dist *C.distribution_wrapper
 	var count C.ulong
 	var ret []Distribution
 
 	C.mm_extract_peaks(mm.wrapper, &dist, &count)
+	defer C.mm_destroy_peaks(mm.wrapper, dist, count)
 
 	for i := 0; i < int(count); i++ {
 		d := C.get_peak(dist, C.uint(i))
@@ -157,8 +207,6 @@ func (mm MultiModal) Peaks() []Distribution {
 			Id:     uint64(d.id),
 		})
 	}
-
-	C.mm_destroy_peaks(mm.wrapper, dist, count)
 
 	return ret
 }
