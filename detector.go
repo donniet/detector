@@ -136,6 +136,12 @@ func (d Distribution) Erf(vector []float32) float32 {
 
 	y := math.Sqrt(float64(acc))
 
+	if y < 0e-6 {
+		return 0.
+	} else if d.StdDev < 0e-6 {
+		return 1.
+	}
+
 	return float32(math.Erf(y/float64(d.StdDev))) / d.StdDev
 }
 
