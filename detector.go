@@ -89,10 +89,21 @@ void mm_extract_peaks(multi_modal_wrapper * wrapper, distribution_wrapper ** wra
 void mm_find_peak(multi_modal_wrapper * wrapper, float * sample, unsigned long dimensions, distribution_wrapper ** wrappers, unsigned long * wrapper_count);
 void mm_destroy_peaks(multi_modal_wrapper * wrapper, distribution_wrapper * wrappers, unsigned long wrapper_count);
 
+void mm_serialize(multi_modal_wrapper * wrapper, char ** output_buf, unsigned long * output_size);
+void mm_destroy_serialize_buffer(multi_modal_wrapper * wrapper, char * output_buf, unsigned long output_size);
+void mm_deserialize(multi_modal_wrapper * wrapper, char * input_buf, unsigned long input_size);
+
+void deserialize_helper(multi_modal_wrapper * wrapper, void * input_buf, unsigned long input_size) {
+	mm_deserialize(wrapper, (char*)input_buf, input_size);
+}
+
 distribution_wrapper * get_peak(distribution_wrapper * dist, uint i) {
 	return &dist[i];
 }
 float get_element(float * arr, uint i) {
+	return arr[i];
+}
+char get_byte(char * arr, unsigned long i) {
 	return arr[i];
 }
 
@@ -104,8 +115,15 @@ import (
 	"image"
 	"image/color"
 	"io"
+	"io/ioutil"
+	"log"
 	"math"
 	"unsafe"
+)
+
+const (
+	sqrt2 = 1.41421356237
+	eps   = 1e-6
 )
 
 type MultiModal struct {
@@ -135,14 +153,15 @@ func (d Distribution) Erf(vector []float32) float32 {
 	}
 
 	y := math.Sqrt(float64(acc))
+	log.Printf("dist: %f", y)
 
-	if y < 0e-6 {
+	if y < eps {
 		return 0.
-	} else if d.StdDev < 0e-6 {
+	} else if d.StdDev < eps {
 		return 1.
 	}
 
-	return float32(math.Erf(y/float64(d.StdDev))) / d.StdDev
+	return float32(math.Erf(y / float64(d.StdDev) / sqrt2))
 }
 
 func NewMultiModal(dimensions int, maximumNodes int) MultiModal {
@@ -150,6 +169,34 @@ func NewMultiModal(dimensions int, maximumNodes int) MultiModal {
 		wrapper: C.mm_create(C.ulong(dimensions), C.ulong(maximumNodes)),
 	}
 }
+
+func (mm MultiModal) WriteTo(w io.Writer) (n int64, err error) {
+	var buf *C.char
+	var siz C.ulong
+	C.mm_serialize(mm.wrapper, &buf, &siz)
+	defer C.mm_destroy_serialize_buffer(mm.wrapper, buf, siz)
+
+	n = int64(siz)
+
+	b := make([]byte, n)
+	for i := int64(0); i < n; i++ {
+		b[i] = byte(C.get_byte(buf, C.ulong(i)))
+	}
+	w.Write(b)
+	return
+}
+
+func (mm MultiModal) ReadFrom(r io.Reader) (int64, error) {
+	b, err := ioutil.ReadAll(r)
+
+	if err != nil {
+		return int64(len(b)), err
+	}
+
+	C.deserialize_helper(mm.wrapper, unsafe.Pointer(&b[0]), C.ulong(len(b)))
+	return int64(len(b)), nil
+}
+
 func (mm MultiModal) Close() {
 	C.mm_destroy(mm.wrapper)
 }
