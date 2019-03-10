@@ -178,6 +178,8 @@ func (mm MultiModal) WriteTo(w io.Writer) (n int64, err error) {
 
 	n = int64(siz)
 
+	log.Printf("serializing %d bytes", n)
+
 	b := make([]byte, n)
 	for i := int64(0); i < n; i++ {
 		b[i] = byte(C.get_byte(buf, C.ulong(i)))
