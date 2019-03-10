@@ -184,7 +184,10 @@ func (mm MultiModal) WriteTo(w io.Writer) (n int64, err error) {
 	for i := int64(0); i < n; i++ {
 		b[i] = byte(C.get_byte(buf, C.ulong(i)))
 	}
-	w.Write(b)
+
+	if n, err := w.Write(b); err != nil {
+		log.Fatalf("error writing mm: %d %v", n, err)
+	}
 	return
 }
 
