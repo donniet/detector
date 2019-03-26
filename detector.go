@@ -413,7 +413,7 @@ func (p *RGB24) Bounds() image.Rectangle {
 
 type Embedding []float32
 
-type classifier struct {
+type Classifier struct {
 	Description string
 	Weights     string
 	Device      string
@@ -424,18 +424,18 @@ type classifier_response struct {
 	Embedding Embedding
 }
 
-func NewClassifier(descriptionFile string, weightsFile string, device string) *classifier {
-	return &classifier{
+func NewClassifier(descriptionFile string, weightsFile string, device string) *Classifier {
+	return &Classifier{
 		Description: descriptionFile,
 		Weights:     weightsFile,
 		Device:      device,
 		classer:     C.create_classifier(C.CString(descriptionFile), C.CString(weightsFile), C.CString(device)),
 	}
 }
-func (c *classifier) Close() {
+func (c *Classifier) Close() {
 	C.destroy_classifier(c.classer)
 }
-func (c *classifier) InferRGB24(rgb *RGB24) classifier_response {
+func (c *Classifier) InferRGB24(rgb *RGB24) classifier_response {
 	res := C.do_classification(c.classer, unsafe.Pointer(&rgb.Pix[0]), C.int(rgb.Stride),
 		C.int(rgb.Rect.Min.X), C.int(rgb.Rect.Min.Y), C.int(rgb.Rect.Max.X), C.int(rgb.Rect.Max.Y))
 	// res := C.do_classification_param(c.classer, unsafe.Pointer(&rgb.Pix[0]), C.uint(rgb.Bounds().Dx()), C.uint(rgb.Bounds().Dy()))
@@ -452,20 +452,20 @@ func (c *classifier) InferRGB24(rgb *RGB24) classifier_response {
 	return ret
 }
 
-type detector struct {
+type Detector struct {
 	Description string
 	Weights     string
 	Device      string
 	detect      *C.detector
 }
-type detection struct {
+type Detection struct {
 	Confidence float32
 	Label      float32
 	Rect       image.Rectangle
 }
 
-func NewDetector(descriptionFile string, weightsFile string, deviceName string) *detector {
-	ret := &detector{
+func NewDetector(descriptionFile string, weightsFile string, deviceName string) *Detector {
+	ret := &Detector{
 		Description: descriptionFile,
 		Weights:     weightsFile,
 		Device:      deviceName,
@@ -481,16 +481,16 @@ func NewDetector(descriptionFile string, weightsFile string, deviceName string) 
 /*
 Close cleans up the memory of the detector.  This must be called to ensure no memory leaks
 */
-func (d *detector) Close() {
+func (d *Detector) Close() {
 	C.destroy_face_detector(d.detect)
 }
 
-func (d *detector) InferRGB(rgb *RGB24) []detection {
+func (d *Detector) InferRGB(rgb *RGB24) []Detection {
 	res := C.do_inference(d.detect, unsafe.Pointer(&rgb.Pix[0]),
 		C.int(rgb.Stride), C.int(rgb.Rect.Min.X), C.int(rgb.Rect.Min.Y), C.int(rgb.Rect.Max.X), C.int(rgb.Rect.Max.Y))
 	defer C.destroy_response(res)
 
-	var ret []detection
+	var ret []Detection
 
 	for i := C.ulong(0); i < res.num_detections; i++ {
 		det := C.get_response_detection(res, i)
@@ -500,7 +500,7 @@ func (d *detector) InferRGB(rgb *RGB24) []detection {
 		y0 := math.Max(float64(det.ymin), 0)
 		y1 := math.Min(float64(det.ymax), 1)
 
-		tec := detection{
+		tec := Detection{
 			Confidence: float32(det.confidence),
 			Label:      float32(det.label),
 			Rect: image.Rect(
