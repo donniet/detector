@@ -5,56 +5,13 @@ package detect
 //#cgo LDFLAGS: -L${SRCDIR}/../../workspace/detect_faces/build/intel64/Debug/lib -ldetector -lclassifier -lmulti_modal
 #cgo LDFLAGS: -ldetector -lclassifier -lmulti_modal
 
+#include <face_detector_wrapper.h>
+#include <facenet_wrapper.h>
+#include <multi_modal_lib.h>
+
 typedef unsigned int uint;
 
 #include <stdio.h>
-
-typedef struct FaceDetector FaceDetector;
-
-typedef struct detection_t {
-  float confidence;
-  float label;
-  float xmin, xmax, ymin, ymax;
-} detection;
-
-typedef struct response_t {
-  unsigned long num_detections;
-  detection * detections;
-} response;
-
-typedef struct detector_t {
-  void * face_detector;
-} detector;
-
-extern FaceDetector * detector_create(
-    const char * networkFile,
-    const char * networkWeights,
-    const char * deviceName);
-
-extern response * detector_do_inference(FaceDetector * d, void * pix, int stride, int x0, int y0, int x1, int y1);
-extern void detector_destroy_response(response * res);
-extern void detector_destroy(FaceDetector * d);
-
-typedef struct classifier_t {
-  void * network;
-} classifier;
-
-typedef struct classifier_request_t {
-  char * data;
-  uint image_width;
-  uint image_height;
-} classifier_request;
-
-typedef struct classifier_response_t {
-  float * embedding;
-  uint embedding_size;
-  float duration;
-} classifier_response;
-
-extern classifier * create_classifier(char * networkFile, char * networkWeights, char * deviceName);
-extern void destroy_classifier(classifier * c);
-extern classifier_response * do_classification(classifier * c, void * data, int stride, int x0, int y0, int x1, int y1);
-extern void destroy_classifier_response(classifier_response * r);
 
 float get_embedding_at(float * embedding, int i) {
 	return embedding[i];
@@ -66,33 +23,6 @@ detection * get_response_detection(response * res, unsigned long dex) {
   }
   return NULL;
 }
-
-
-typedef struct {
-    void * ds;
-    unsigned long dimensions;
-} multi_modal_wrapper;
-
-typedef struct {
-    float * mean;
-    unsigned long mean_size;
-    float standard_deviation;
-    unsigned long sample_count;
-    unsigned long id;
-} distribution_wrapper;
-
-multi_modal_wrapper * mm_create(unsigned long dimensions, unsigned long maximum_nodes);
-void mm_destroy(multi_modal_wrapper * wrapper);
-
-void mm_insert(multi_modal_wrapper * wrapper, float * sample, unsigned long dimensions);
-unsigned long mm_get_count(multi_modal_wrapper * wrapper);
-void mm_extract_peaks(multi_modal_wrapper * wrapper, distribution_wrapper ** wrappers, unsigned long * wrapper_count);
-void mm_find_peak(multi_modal_wrapper * wrapper, float * sample, unsigned long dimensions, distribution_wrapper ** wrappers, unsigned long * wrapper_count);
-void mm_destroy_peaks(multi_modal_wrapper * wrapper, distribution_wrapper * wrappers, unsigned long wrapper_count);
-
-void mm_serialize(multi_modal_wrapper * wrapper, char ** output_buf, unsigned long * output_size);
-void mm_destroy_serialize_buffer(multi_modal_wrapper * wrapper, char * output_buf, unsigned long output_size);
-void mm_deserialize(multi_modal_wrapper * wrapper, char * input_buf, unsigned long input_size);
 
 void deserialize_helper(multi_modal_wrapper * wrapper, void * input_buf, unsigned long input_size) {
 	mm_deserialize(wrapper, (char*)input_buf, input_size);
@@ -418,7 +348,7 @@ type Classifier struct {
 	Description string
 	Weights     string
 	Device      string
-	classer     *C.classifier
+	classer     unsafe.Pointer
 }
 type classifier_response struct {
 	Duration  float32
@@ -437,7 +367,7 @@ func (c *Classifier) Close() {
 	C.destroy_classifier(c.classer)
 }
 func (c *Classifier) InferRGB24(rgb *RGB24) classifier_response {
-	res := C.do_classification(c.classer, unsafe.Pointer(&rgb.Pix[0]), C.int(rgb.Stride),
+	res := C.classifier_do_classification(c.classer, unsafe.Pointer(&rgb.Pix[0]), C.int(rgb.Stride),
 		C.int(rgb.Rect.Min.X), C.int(rgb.Rect.Min.Y), C.int(rgb.Rect.Max.X), C.int(rgb.Rect.Max.Y))
 	// res := C.do_classification_param(c.classer, unsafe.Pointer(&rgb.Pix[0]), C.uint(rgb.Bounds().Dx()), C.uint(rgb.Bounds().Dy()))
 	defer C.destroy_classifier_response(res)
@@ -446,7 +376,7 @@ func (c *Classifier) InferRGB24(rgb *RGB24) classifier_response {
 		Duration: float32(res.duration),
 	}
 
-	for i := C.uint(0); i < res.embedding_size; i++ {
+	for i := C.ulong(0); i < res.embedding_size; i++ {
 		ret.Embedding = append(ret.Embedding, float32(C.get_embedding_at(res.embedding, C.int(i))))
 	}
 
@@ -457,7 +387,7 @@ type Detector struct {
 	Description string
 	Weights     string
 	Device      string
-	detect      *C.FaceDetector
+	detect      unsafe.Pointer
 }
 type Detection struct {
 	Confidence float32
