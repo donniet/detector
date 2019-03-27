@@ -9,6 +9,8 @@ typedef unsigned int uint;
 
 #include <stdio.h>
 
+typedef struct FaceDetector FaceDetector;
+
 typedef struct detection_t {
   float confidence;
   float label;
@@ -24,15 +26,14 @@ typedef struct detector_t {
   void * face_detector;
 } detector;
 
-extern int create_face_detector(
+extern FaceDetector * detector_create(
     const char * networkFile,
     const char * networkWeights,
-    const char * deviceName,
-    detector ** d);
+    const char * deviceName);
 
-extern response * do_inference(detector * d, void * pix, int stride, int x0, int y0, int x1, int y1);
-extern void destroy_response(response * res);
-extern void destroy_face_detector(detector * d);
+extern response * detector_do_inference(FaceDetector * d, void * pix, int stride, int x0, int y0, int x1, int y1);
+extern void detector_destroy_response(response * res);
+extern void detector_destroy(FaceDetector * d);
 
 typedef struct classifier_t {
   void * network;
@@ -456,7 +457,7 @@ type Detector struct {
 	Description string
 	Weights     string
 	Device      string
-	detect      *C.detector
+	detect      *C.FaceDetector
 }
 type Detection struct {
 	Confidence float32
@@ -470,11 +471,10 @@ func NewDetector(descriptionFile string, weightsFile string, deviceName string) 
 		Weights:     weightsFile,
 		Device:      deviceName,
 	}
-	C.create_face_detector(
+	ret.detect = C.detector_create(
 		C.CString(descriptionFile),
 		C.CString(weightsFile),
-		C.CString(deviceName),
-		&(ret.detect))
+		C.CString(deviceName))
 	return ret
 }
 
@@ -482,13 +482,14 @@ func NewDetector(descriptionFile string, weightsFile string, deviceName string) 
 Close cleans up the memory of the detector.  This must be called to ensure no memory leaks
 */
 func (d *Detector) Close() {
-	C.destroy_face_detector(d.detect)
+	C.detector_destroy(d.detect)
+	d.detect = nil
 }
 
 func (d *Detector) InferRGB(rgb *RGB24) []Detection {
-	res := C.do_inference(d.detect, unsafe.Pointer(&rgb.Pix[0]),
+	res := C.detector_do_inference(d.detect, unsafe.Pointer(&rgb.Pix[0]),
 		C.int(rgb.Stride), C.int(rgb.Rect.Min.X), C.int(rgb.Rect.Min.Y), C.int(rgb.Rect.Max.X), C.int(rgb.Rect.Max.Y))
-	defer C.destroy_response(res)
+	defer C.detector_destroy_response(res)
 
 	var ret []Detection
 
