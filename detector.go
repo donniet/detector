@@ -1,9 +1,7 @@
 package detect
 
 /*
-//#cgo LDFLAGS: -L../detect_faces/build/armv7l/Release/lib -ldetector -lclassifier -lmulti_modal
-//#cgo LDFLAGS: -L${SRCDIR}/../../workspace/detect_faces/build/intel64/Debug/lib -ldetector -lclassifier -lmulti_modal
-#cgo LDFLAGS: -ldetector -lclassifier -lmulti_modal
+#cgo LDFLAGS: -ldetector
 
 #include <face_detector_wrapper.h>
 #include <facenet_wrapper.h>
@@ -101,6 +99,10 @@ func NewMultiModal(dimensions int, maximumNodes int) MultiModal {
 	}
 }
 
+func (mm MultiModal) Dimensions() int {
+	return int(C.mm_get_dimensions(mm.wrapper))
+}
+
 func (mm MultiModal) WriteTo(w io.Writer) (n int64, err error) {
 	var buf *C.char
 	var siz C.ulong
@@ -160,8 +162,8 @@ func (mm MultiModal) Find(vector []float32) Distribution {
 
 	d := C.get_peak(dist, C.uint(0))
 
-	mean := make([]float32, mm.wrapper.dimensions)
-	for j := 0; j < int(mm.wrapper.dimensions); j++ {
+	mean := make([]float32, mm.Dimensions())
+	for j := 0; j < mm.Dimensions(); j++ {
 		mean[j] = float32(C.get_element(d.mean, C.uint(j)))
 	}
 
@@ -184,8 +186,8 @@ func (mm MultiModal) Peaks() []Distribution {
 	for i := 0; i < int(count); i++ {
 		d := C.get_peak(dist, C.uint(i))
 
-		mean := make([]float32, mm.wrapper.dimensions)
-		for j := 0; j < int(mm.wrapper.dimensions); j++ {
+		mean := make([]float32, mm.Dimensions())
+		for j := 0; j < mm.Dimensions(); j++ {
 			mean[j] = float32(C.get_element(d.mean, C.uint(j)))
 		}
 
@@ -348,7 +350,7 @@ type Classifier struct {
 	Description string
 	Weights     string
 	Device      string
-	classer     unsafe.Pointer
+	classer     *C.struct_Facenet
 }
 type classifier_response struct {
 	Duration  float32
@@ -387,7 +389,7 @@ type Detector struct {
 	Description string
 	Weights     string
 	Device      string
-	detect      unsafe.Pointer
+	detect      *C.struct_FaceDetector
 }
 type Detection struct {
 	Confidence float32
