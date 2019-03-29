@@ -475,6 +475,13 @@ func (c *Classifier) Close() {
 }
 
 /*
+EmbeddingSize returns the number of dimensions of the output embedding
+*/
+func (c *Classifier) EmbeddingSize() int {
+	return int(C.classifier_get_embedding_size(c.classer))
+}
+
+/*
 InferRGB24 takes an RGB24 image and gets a ClassifierResponse
 */
 func (c *Classifier) InferRGB24(rgb *RGB24) ClassifierResponse {
