@@ -55,9 +55,16 @@ const (
 	eps   = 1e-6
 )
 
+/*
+MultiModal is a structure to store a mixture of spherically symmetric multi-dimensional gaussian distributions
+*/
 type MultiModal struct {
 	wrapper *C.multi_modal_wrapper
 }
+
+/*
+Distribution is a struct that represents a single peak in the MultiModal structure
+*/
 type Distribution struct {
 	Mean   []float32
 	StdDev float32
@@ -65,6 +72,11 @@ type Distribution struct {
 	Id     uint64
 }
 
+/*
+Erf is a version of the error function which operates on spherically symmetric gassian
+distributions.  It's actually not the proper math for a multiple-dimension gaussian,
+but hopefully good enough for now...
+*/
 func (d Distribution) Erf(vector []float32) float32 {
 	l := len(vector)
 	if l > len(d.Mean) {
@@ -93,16 +105,25 @@ func (d Distribution) Erf(vector []float32) float32 {
 	return float32(math.Erf(y / float64(d.StdDev) / sqrt2))
 }
 
+/*
+NewMultiModal creates a new MultiModal structure
+*/
 func NewMultiModal(dimensions int, maximumNodes int) MultiModal {
 	return MultiModal{
 		wrapper: C.mm_create(C.ulong(dimensions), C.ulong(maximumNodes)),
 	}
 }
 
+/*
+Dimensions returns the number of dimensions specified in the construction
+*/
 func (mm MultiModal) Dimensions() int {
 	return int(C.mm_get_dimensions(mm.wrapper))
 }
 
+/*
+WriteTo implements the WriterTo interface and is used to save the data structure to a writer
+*/
 func (mm MultiModal) WriteTo(w io.Writer) (n int64, err error) {
 	var buf *C.char
 	var siz C.ulong
@@ -124,6 +145,9 @@ func (mm MultiModal) WriteTo(w io.Writer) (n int64, err error) {
 	return
 }
 
+/*
+ReadFrom implements the ReaderFrom interface and is used for restoring the MultiModal structure from a reader
+*/
 func (mm MultiModal) ReadFrom(r io.Reader) (int64, error) {
 	b, err := ioutil.ReadAll(r)
 
@@ -135,9 +159,16 @@ func (mm MultiModal) ReadFrom(r io.Reader) (int64, error) {
 	return int64(len(b)), nil
 }
 
+/*
+Close must be called to clean up the memory used by MultiModal.  Failing to call this method before the multimodal leaves scope will result in a large memory leak.
+*/
 func (mm MultiModal) Close() {
 	C.mm_destroy(mm.wrapper)
 }
+
+/*
+Insert adds a float vector to the data structure
+*/
 func (mm MultiModal) Insert(vector []float32) {
 	dat := make([]C.float, len(vector))
 	for i, f := range vector {
@@ -145,9 +176,17 @@ func (mm MultiModal) Insert(vector []float32) {
 	}
 	C.mm_insert(mm.wrapper, &dat[0], C.ulong(len(vector)))
 }
+
+/*
+Count returns the total number of vectors inserted into the data structure
+*/
 func (mm MultiModal) Count() int {
 	return int(C.mm_get_count(mm.wrapper))
 }
+
+/*
+Find returns the best distribution given the input float vector
+*/
 func (mm MultiModal) Find(vector []float32) Distribution {
 	var dist *C.distribution_wrapper
 	var count C.ulong
@@ -175,6 +214,10 @@ func (mm MultiModal) Find(vector []float32) Distribution {
 	}
 
 }
+
+/*
+Peaks returns all the likely peaks in the data structure as Distributions
+*/
 func (mm MultiModal) Peaks() []Distribution {
 	var dist *C.distribution_wrapper
 	var count C.ulong
@@ -202,21 +245,33 @@ func (mm MultiModal) Peaks() []Distribution {
 	return ret
 }
 
+/*
+RGB24 is a structure holding a 24-bit raw RGB image
+*/
 type RGB24 struct {
 	Pix    []uint8
 	Stride int
 	Rect   image.Rectangle
 }
 
+/*
+RGB is a single pixel in the RGB24 image type
+*/
 type RGB struct {
 	R, G, B uint8
 }
 
+/*
+RGB24Reader wraps an io.Reader but returns RGB24 images of dimension given by Rect. This is used fo read raw pixels from a pipe or file.
+*/
 type RGB24Reader struct {
 	Reader io.Reader
 	Rect   image.Rectangle
 }
 
+/*
+ReadRGB24 reads 3 * width * height bits and puts them into an RGB24 image in row major order
+*/
 func (r *RGB24Reader) ReadRGB24() (*RGB24, error) {
 	buf := make([]byte, r.Rect.Dx()*r.Rect.Dy()*3)
 	if len(buf) == 0 {
@@ -241,11 +296,17 @@ func (r *RGB24Reader) ReadRGB24() (*RGB24, error) {
 	}, nil
 }
 
+/*
+RGBModel is the color model for a 24-bit image
+*/
 var RGBModel color.Model = color.ModelFunc(func(c color.Color) color.Color {
 	r, g, b, _ := c.RGBA()
 	return RGB{uint8(r >> 8), uint8(g >> 8), uint8(b >> 8)}
 })
 
+/*
+RGBA implements the Color interface for the RGB pixel type
+*/
 func (c RGB) RGBA() (r, g, b, a uint32) {
 	r = uint32(c.R) << 8
 	g = uint32(c.G) << 8
@@ -253,6 +314,9 @@ func (c RGB) RGBA() (r, g, b, a uint32) {
 	return
 }
 
+/*
+NewRGB creates a black RGB24 image
+*/
 func NewRGB(r image.Rectangle) *RGB24 {
 	return &RGB24{
 		Rect:   r.Canon(),
@@ -260,6 +324,10 @@ func NewRGB(r image.Rectangle) *RGB24 {
 		Pix:    make([]uint8, 3*r.Dx()*r.Dy()),
 	}
 }
+
+/*
+FromImage constructs an RGB24 from a given image
+*/
 func FromImage(img image.Image) *RGB24 {
 	if r, ok := img.(*RGB24); ok {
 		return r
@@ -273,6 +341,10 @@ func FromImage(img image.Image) *RGB24 {
 	}
 	return r
 }
+
+/*
+FromRaw constructs an RGB24 image from raw bytes in RGB-row major order
+*/
 func FromRaw(b []byte, stride int) *RGB24 {
 	return &RGB24{
 		Pix:    b,
@@ -281,6 +353,9 @@ func FromRaw(b []byte, stride int) *RGB24 {
 	}
 }
 
+/*
+At implements the image.Image interface for RGB24
+*/
 func (p *RGB24) At(x, y int) color.Color {
 	if !(image.Point{x, y}.In(p.Rect)) {
 		return RGB{}
@@ -290,6 +365,10 @@ func (p *RGB24) At(x, y int) color.Color {
 		p.Pix[i], p.Pix[i+1], p.Pix[i+2],
 	}
 }
+
+/*
+Set implements the image.Image interface for RGB24
+*/
 func (p *RGB24) Set(x, y int, c color.Color) {
 	if !(image.Point{x, y}.In(p.Rect)) {
 		return
@@ -301,10 +380,16 @@ func (p *RGB24) Set(x, y int, c color.Color) {
 	p.Pix[i+2] = uint8(c1.B)
 }
 
+/*
+ColorModel implements the image.Image interface for RGB24
+*/
 func (p *RGB24) ColorModel() color.Model {
 	return RGBModel
 }
 
+/*
+SubImage returns an *RGB24 which is the crop of the given image using the rectangle r
+*/
 func (p *RGB24) SubImage(r image.Rectangle) image.Image {
 	r = r.Intersect(p.Rect)
 	// If r1 and r2 are Rectangles, r1.Intersect(r2) is not guaranteed to be inside
@@ -340,23 +425,39 @@ func (p *RGB24) PixOffset(x, y int) int {
 	return (y-p.Rect.Min.Y)*p.Stride + (x-p.Rect.Min.X)*3
 }
 
+/*
+Bounds returns the bounding rectangle of the image
+*/
 func (p *RGB24) Bounds() image.Rectangle {
 	return p.Rect
 }
 
+/*
+Embedding is a float vector
+*/
 type Embedding []float32
 
+/*
+Classifier is a type used to get embeddings from images
+*/
 type Classifier struct {
 	Description string
 	Weights     string
 	Device      string
 	classer     *C.struct_Facenet
 }
-type classifier_response struct {
+
+/*
+ClassifierResponse is the response from a classification request
+*/
+type ClassifierResponse struct {
 	Duration  float32
 	Embedding Embedding
 }
 
+/*
+NewClassifier takes an OpenVINO description and weights file and creates a classifier for the given device
+*/
 func NewClassifier(descriptionFile string, weightsFile string, device string) *Classifier {
 	return &Classifier{
 		Description: descriptionFile,
@@ -365,16 +466,24 @@ func NewClassifier(descriptionFile string, weightsFile string, device string) *C
 		classer:     C.create_classifier(C.CString(descriptionFile), C.CString(weightsFile), C.CString(device)),
 	}
 }
+
+/*
+Close must be called to free memory from the Classifier object
+*/
 func (c *Classifier) Close() {
 	C.destroy_classifier(c.classer)
 }
-func (c *Classifier) InferRGB24(rgb *RGB24) classifier_response {
+
+/*
+InferRGB24 takes an RGB24 image and gets a ClassifierResponse
+*/
+func (c *Classifier) InferRGB24(rgb *RGB24) ClassifierResponse {
 	res := C.classifier_do_classification(c.classer, unsafe.Pointer(&rgb.Pix[0]), C.int(rgb.Stride),
 		C.int(rgb.Rect.Min.X), C.int(rgb.Rect.Min.Y), C.int(rgb.Rect.Max.X), C.int(rgb.Rect.Max.Y))
 	// res := C.do_classification_param(c.classer, unsafe.Pointer(&rgb.Pix[0]), C.uint(rgb.Bounds().Dx()), C.uint(rgb.Bounds().Dy()))
 	defer C.destroy_classifier_response(res)
 
-	ret := classifier_response{
+	ret := ClassifierResponse{
 		Duration: float32(res.duration),
 	}
 
@@ -385,18 +494,28 @@ func (c *Classifier) InferRGB24(rgb *RGB24) classifier_response {
 	return ret
 }
 
+/*
+Detector wraps an OpenVINO detector network
+*/
 type Detector struct {
 	Description string
 	Weights     string
 	Device      string
 	detect      *C.struct_FaceDetector
 }
+
+/*
+Detection is a single detection from a Detector object
+*/
 type Detection struct {
 	Confidence float32
 	Label      float32
 	Rect       image.Rectangle
 }
 
+/*
+NewDetector constructs a Detector from an OpenVINO description and weights file
+*/
 func NewDetector(descriptionFile string, weightsFile string, deviceName string) *Detector {
 	ret := &Detector{
 		Description: descriptionFile,
@@ -418,6 +537,9 @@ func (d *Detector) Close() {
 	d.detect = nil
 }
 
+/*
+InferRGB takes an RGB24 image and returns a slice of Detection objects
+*/
 func (d *Detector) InferRGB(rgb *RGB24) []Detection {
 	res := C.detector_do_inference(d.detect, unsafe.Pointer(&rgb.Pix[0]),
 		C.int(rgb.Stride), C.int(rgb.Rect.Min.X), C.int(rgb.Rect.Min.Y), C.int(rgb.Rect.Max.X), C.int(rgb.Rect.Max.Y))
