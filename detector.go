@@ -77,7 +77,7 @@ Erf is a version of the error function which operates on spherically symmetric g
 distributions.  It's actually not the proper math for a multiple-dimension gaussian,
 but hopefully good enough for now...
 */
-func (d Distribution) Erf(vector []float32) float32 {
+func (d Distribution) Erf(vector []float32) (er float32, dis float32) {
 	l := len(vector)
 	if l > len(d.Mean) {
 		l = len(d.Mean)
@@ -97,12 +97,12 @@ func (d Distribution) Erf(vector []float32) float32 {
 	log.Printf("dist: %f", y)
 
 	if y < eps {
-		return 0.
+		return 0., float32(y)
 	} else if d.StdDev < eps {
-		return 1.
+		return 1., float32(y)
 	}
 
-	return float32(math.Erf(y / float64(d.StdDev) / sqrt2))
+	return float32(math.Erf(y / float64(d.StdDev) / sqrt2)), float32(y)
 }
 
 /*
