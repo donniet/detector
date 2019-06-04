@@ -271,6 +271,7 @@ type RGB24Reader struct {
 
 /*
 ReadRGB24 reads 3 * width * height bits and puts them into an RGB24 image in row major order
+TODO: update to read in from multiple UDP clients and use from address to create seperate buffers
 */
 func (r *RGB24Reader) ReadRGB24() (*RGB24, error) {
 	buf := make([]byte, r.Rect.Dx()*r.Rect.Dy()*3)
@@ -278,9 +279,13 @@ func (r *RGB24Reader) ReadRGB24() (*RGB24, error) {
 		return nil, fmt.Errorf("cannot read zero pixel image")
 	}
 
+	// log.Printf("expecting %d bytes per frame.", len(buf))
+
 	cur := 0
 	for {
-		if n, err := r.Reader.Read(buf[cur:]); err != nil {
+		n, err := r.Reader.Read(buf[cur:])
+
+		if err != nil {
 			return nil, err
 		} else if n+cur < len(buf) {
 			cur += n

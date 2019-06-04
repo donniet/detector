@@ -22,9 +22,9 @@ var (
 
 func TestErf(t *testing.T) {
 
-	e := distA.Erf(vectA)
+	e, _ := distA.Erf(vectA)
 	t.Errorf("erf: %f", e)
 
-	e = dist.Erf(vect2)
+	e, _ = dist.Erf(vect2)
 	t.Errorf("erf: %f", e)
 }
